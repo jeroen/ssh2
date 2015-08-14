@@ -70,24 +70,33 @@ const char *get_error(LIBSSH2_SESSION *session, const char *str){
   return buf;
 }
 
+void cleanup_session(LIBSSH2_SESSION *session){
+  void **abstract = libssh2_session_abstract(session);
+  struct session_data *data = *abstract;
+  int verb = data->verbose;
+  int sock = data->sock;
+  log("Cleaning up session");
+  if(libssh2_session_disconnect(session, "See you later"))
+    log(get_error(session, "session disconnect"));
+  if(libssh2_session_free(session))
+    log(get_error(session, "session free"));
+  #ifdef WIN32
+    closesocket(sock);
+  #else
+    close(sock);
+  #endif
+}
+
+void ssh_error(LIBSSH2_SESSION *session, const char *str){
+  const char *errstr = get_error(session, str);
+  cleanup_session(session);
+  Rf_error(errstr);
+}
+
 void fin_session(SEXP ptr){
   LIBSSH2_SESSION *session = (LIBSSH2_SESSION*) R_ExternalPtrAddr(ptr);
-  if(session){
-    void **abstract = libssh2_session_abstract(session);
-    struct session_data *data = *abstract;
-    int verb = data->verbose;
-    int sock = data->sock;
-    log("Cleaning up session");
-    if(libssh2_session_disconnect(session, "See you later"))
-      log(get_error(session, "session disconnect"));
-    if(libssh2_session_free(session))
-      log(get_error(session, "session free"));
-    #ifdef WIN32
-        closesocket(sock);
-    #else
-        close(sock);
-    #endif
-  }
+  if(session)
+    cleanup_session(session);
   R_ClearExternalPtr(ptr);
 }
 
@@ -183,13 +192,7 @@ SEXP R_ssh_session(SEXP host, SEXP port, SEXP user, SEXP key, SEXP password, SEX
     }
   }
 
-  libssh2_session_disconnect(session, "Shutdown");
-  libssh2_session_free(session);
-  #ifdef WIN32
-    closesocket(sock);
-  #else
-    close(sock);
-  #endif
+  cleanup_session(session);
   Rf_error("Authentication failed");
 
   auth_done: log("Opening channel");
@@ -197,14 +200,14 @@ SEXP R_ssh_session(SEXP host, SEXP port, SEXP user, SEXP key, SEXP password, SEX
   /* Request a shell */
   LIBSSH2_CHANNEL *channel = libssh2_channel_open_session(session);
   if(!channel)
-    Rf_error(get_error(session, "open channel"));
+    ssh_error(session, "open channel");
 
   if (libssh2_channel_request_pty(channel, "vanilla"))
-    Rf_error(get_error(session, "request pty"));
+    ssh_error(session, "request pty");
 
   /* Open a shell on that pty */
   if (libssh2_channel_shell(channel))
-    Rf_error(get_error(session, "channel shell"));
+    ssh_error(session, "channel shell");
 
   /* Return pointer */
   SEXP ptr = PROTECT(R_MakeExternalPtr(session, R_NilValue, R_NilValue));
