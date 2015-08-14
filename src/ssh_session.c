@@ -55,9 +55,9 @@ static void kbd_callback(const char *name, int name_len, const char *instruction
   for (int i = 0; i < num_prompts; i++) {
     void *str = malloc(prompts[i].length);
     memcpy(str, prompts[i].text, prompts[i].length);
+    prompts[i].text[prompts[i].length] = '\0';
     SEXP res = readpassword(str, data->passcb);
     free(str);
-
     responses[i].length = LENGTH(STRING_ELT(res, 0));
     responses[i].text = malloc(LENGTH(STRING_ELT(res, 0)));
     memcpy(responses[i].text, CHAR(STRING_ELT(res, 0)), responses[i].length);
