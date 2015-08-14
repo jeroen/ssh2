@@ -1,0 +1,12 @@
+Package: ssh
+Type: Package
+Title: Secure Shell (SSH) Client for R
+Version: 0.1
+Authors@R: person("Jeroen", "Ooms", , "jeroen.ooms@stat.ucla.edu", role = c("cre", "aut"))
+Description: Connect to SSH servers
+License: MIT + file LICENSE
+SystemRequirements: libssh2: libssh2-devel (rpm) or libssh2-dev (deb).
+URL: https://github.com/ssh/curl
+BugReports: https://github.com/jeroenooms/ssh/issues
+Suggests: knitr, rmarkdown
+VignetteBuilder: knitr
