@@ -10,7 +10,7 @@ void R_init_ssh(DllInfo *info) {
     WSADATA wsadata;
     int err = WSAStartup(MAKEWORD(2,0), &wsadata);
     if (err != 0)
-      Rf_error(stderr, "WSAStartup failed with error: %d\n", err);
+      Rf_error("WSAStartup failed with error: %d\n", err);
   #endif
 
   /* init libssh2 */
