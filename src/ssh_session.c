@@ -106,35 +106,34 @@ SEXP R_ssh_session(SEXP host, SEXP port, SEXP user, SEXP key, SEXP password, SEX
   int verb = asLogical(verbose);
   const char *username = CHAR(STRING_ELT(user, 0));
 
-  /* Connect to host */
-  int sock = socket(AF_INET, SOCK_STREAM, 0);
-  struct sockaddr_in sin;
-  sin.sin_family = AF_INET;
-  sin.sin_port = htons(asInteger(port));
-
   /* Resovle hostname */
   struct hostent *hostaddr = gethostbyname(CHAR(STRING_ELT(host, 0)));
   if(!hostaddr)
     Rf_error("Failed to resolve hostname");
 
-  //sin.sin_addr.s_addr = inet_addr(CHAR(STRING_ELT(host, 0)));
+  /* allocate socket */
+  int sock = socket(AF_INET, SOCK_STREAM, 0);
+  struct sockaddr_in sin;
+  sin.sin_family = AF_INET;
+  sin.sin_port = htons(asInteger(port));
   sin.sin_addr.s_addr = *(long*)(hostaddr->h_addr);
+  //sin.sin_addr.s_addr = inet_addr(CHAR(STRING_ELT(host, 0)));
 
-  if (connect(sock, (struct sockaddr*)(&sin), sizeof(struct sockaddr_in)) != 0)
-    Rf_error("failed to connect to %s:%d!", CHAR(STRING_ELT(host, 0)), asInteger(port));
-
-  /* Setup SSL session */
+  /* allocate ssh session */
   LIBSSH2_SESSION *session = libssh2_session_init();
-  if (libssh2_session_handshake(session, sock))
-    get_error(session, "session handshake");
-
-  /* private data */
   struct session_data data;
   void **abstract = libssh2_session_abstract(session);
   data.verbose = asLogical(verbose);
   data.passcb = password;
   data.sock = sock;
   *abstract = &data;
+
+  /* Connect to host */
+  log("starting handshake");
+  if (connect(sock, (struct sockaddr*)(&sin), sizeof(struct sockaddr_in)) != 0)
+    Rf_error("failed to connect to %s:%d!", CHAR(STRING_ELT(host, 0)), asInteger(port));
+  if (libssh2_session_handshake(session, sock))
+    ssh_error(session, "session handshake");
 
   /* Get host sha1 pubkey */
   unsigned char *md5 = (unsigned char*) libssh2_hostkey_hash(session, LIBSSH2_HOSTKEY_HASH_MD5);
