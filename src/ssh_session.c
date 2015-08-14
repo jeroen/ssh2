@@ -10,11 +10,7 @@
 #include <windows.h>
 #include <winsock2.h>
 #else
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <unistd.h>
-#include <arpa/inet.h>
-#include <resolv.h>
 #include <netdb.h>
 #endif
 
@@ -23,8 +19,10 @@
 #define log(...) if(verb) Rprintf(__VA_ARGS__)
 
 struct session_data {
+  int sock;
   int verbose;
   SEXP passcb;
+  LIBSSH2_CHANNEL *channel;
 };
 
 SEXP readpassword(const char *text, SEXP fun){
@@ -53,9 +51,9 @@ static void kbd_callback(const char *name, int name_len, const char *instruction
     Rprintf("Instructions: %s\n", instruction);
 
   for (int i = 0; i < num_prompts; i++) {
-    void *str = malloc(prompts[i].length);
+    char *str = malloc(prompts[i].length+1);
     memcpy(str, prompts[i].text, prompts[i].length);
-    prompts[i].text[prompts[i].length] = '\0';
+    str[prompts[i].length] = '\0';
     SEXP res = readpassword(str, data->passcb);
     free(str);
     responses[i].length = LENGTH(STRING_ELT(res, 0));
@@ -68,8 +66,29 @@ const char *get_error(LIBSSH2_SESSION *session, const char *str){
   char *buf = malloc(1000);
   char *errmsg = NULL;
   int err = libssh2_session_last_error(session, &errmsg, NULL, 0);
-  snprintf(buf, 1000, "ssh %s error %d: %s\n", str, err, errmsg);
+  snprintf(buf, 1000, "ssh %s error %d: %s", str, err, errmsg);
   return buf;
+}
+
+void fin_session(SEXP ptr){
+  LIBSSH2_SESSION *session = (LIBSSH2_SESSION*) R_ExternalPtrAddr(ptr);
+  if(session){
+    void **abstract = libssh2_session_abstract(session);
+    struct session_data *data = *abstract;
+    int verb = data->verbose;
+    int sock = data->sock;
+    log("Cleaning up session");
+    if(libssh2_session_disconnect(session, "See you later"))
+      log(get_error(session, "session disconnect"));
+    if(libssh2_session_free(session))
+      log(get_error(session, "session free"));
+    #ifdef WIN32
+        closesocket(sock);
+    #else
+        close(sock);
+    #endif
+  }
+  R_ClearExternalPtr(ptr);
 }
 
 SEXP R_ssh_session(SEXP host, SEXP port, SEXP user, SEXP key, SEXP password, SEXP verbose){
@@ -93,7 +112,7 @@ SEXP R_ssh_session(SEXP host, SEXP port, SEXP user, SEXP key, SEXP password, SEX
   sin.sin_addr.s_addr = *(long*)(hostaddr->h_addr);
 
   if (connect(sock, (struct sockaddr*)(&sin), sizeof(struct sockaddr_in)) != 0)
-    Rf_error("failed to connect to %s:%d!\n", CHAR(STRING_ELT(host, 0)), asInteger(port));
+    Rf_error("failed to connect to %s:%d!", CHAR(STRING_ELT(host, 0)), asInteger(port));
 
   /* Setup SSL session */
   LIBSSH2_SESSION *session = libssh2_session_init();
@@ -105,27 +124,28 @@ SEXP R_ssh_session(SEXP host, SEXP port, SEXP user, SEXP key, SEXP password, SEX
   void **abstract = libssh2_session_abstract(session);
   data.verbose = asLogical(verbose);
   data.passcb = password;
+  data.sock = sock;
   *abstract = &data;
 
   /* Get host sha1 pubkey */
   unsigned char *md5 = (unsigned char*) libssh2_hostkey_hash(session, LIBSSH2_HOSTKEY_HASH_MD5);
   char fingerprint[48];
-  char *ptr = fingerprint;
+  char *cursor = fingerprint;
   for(int i = 0; i < 16; i++) {
-    snprintf(ptr, 4, "%02x:", md5[i]);
-    ptr+=3;
+    snprintf(cursor, 4, "%02x:", md5[i]);
+    cursor+=3;
   }
-  ptr[-1] = '\0';
-  log("Host RSA key fingerprint is %s\n", fingerprint);
+  cursor[-1] = '\0';
+  log("Host RSA key fingerprint is %s", fingerprint);
 
   /* check what authentication methods are available */
   char *authlist = libssh2_userauth_list(session, username, strlen(username));
-  log("userauthlist: %s\n", authlist);
+  log("userauthlist: %s", authlist);
 
   /* First try public key authentication */
   if (key != R_NilValue && strstr(authlist, "publickey")) {
     const char *keyfile = CHAR(STRING_ELT(key, 0));
-    log("Trying public key authentication\n");
+    log("Trying public key authentication");
     int err = libssh2_userauth_publickey_fromfile(session, username, NULL, keyfile, NULL);
     if(err == -16) {
       //retry with passphrase
@@ -135,36 +155,44 @@ SEXP R_ssh_session(SEXP host, SEXP port, SEXP user, SEXP key, SEXP password, SEX
         log(get_error(session, "private key"));
     }
     if(!err){
-      log("Authentication by public key succeeded.\n");
+      log("Authentication by public key succeeded.");
       goto auth_done;
     }
   }
 
   /* Try keyboard-interactive auth */
   if (strstr(authlist, "keyboard-interactive")) {
-    log("Trying keyboard-interactive authentication\n");
+    log("Trying keyboard-interactive authentication");
     if (libssh2_userauth_keyboard_interactive(session, username, &kbd_callback) ) {
       log(get_error(session, "interactive auth"));
     } else {
-      log("Authentication by keyboard-interactive succeeded.\n");
+      log("Authentication by keyboard-interactive succeeded.");
       goto auth_done;
     }
   }
 
   /* Try fixed password auth */
   if (strstr(authlist, "password")) {
-    log("Trying basic password authentication\n");
+    log("Trying basic password authentication");
     SEXP pw = readpassword("Enter password:", password);
     if (libssh2_userauth_password(session, username, CHAR(STRING_ELT(pw, 0)))) {
       log(get_error(session, "password auth"));
     } else {
-      log("Authentication by password succeeded.\n");
+      log("Authentication by password succeeded.");
       goto auth_done;
     }
   }
 
+  libssh2_session_disconnect(session, "Shutdown");
+  libssh2_session_free(session);
+  #ifdef WIN32
+    closesocket(sock);
+  #else
+    close(sock);
+  #endif
   Rf_error("Authentication failed");
-  auth_done: log("Done with auth\n");
+
+  auth_done: log("Opening channel");
 
   /* Request a shell */
   LIBSSH2_CHANNEL *channel = libssh2_channel_open_session(session);
@@ -178,11 +206,10 @@ SEXP R_ssh_session(SEXP host, SEXP port, SEXP user, SEXP key, SEXP password, SEX
   if (libssh2_channel_shell(channel))
     Rf_error(get_error(session, "channel shell"));
 
-  size_t max = 1000000;
-  char buf[max];
-  ssize_t len = libssh2_channel_read(channel, buf, max);
-  SEXP out = PROTECT(allocVector(STRSXP, 1));
-  SET_STRING_ELT(out, 0, mkCharLen(buf, len));
+  /* Return pointer */
+  SEXP ptr = PROTECT(R_MakeExternalPtr(session, R_NilValue, R_NilValue));
+  R_RegisterCFinalizerEx(ptr, fin_session, 1);
+  setAttrib(ptr, R_ClassSymbol, mkString("ssh_session"));
   UNPROTECT(1);
-  return out;
+  return ptr;
 }
