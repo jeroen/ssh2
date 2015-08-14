@@ -76,7 +76,6 @@ SEXP R_ssh_session(SEXP host, SEXP port, SEXP user, SEXP key, SEXP password, SEX
   /* user-pass */
   int verb = asLogical(verbose);
   const char *username = CHAR(STRING_ELT(user, 0));
-  const char *keyfile = CHAR(STRING_ELT(key, 0));
 
   /* Connect to host */
   int sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -124,6 +123,7 @@ SEXP R_ssh_session(SEXP host, SEXP port, SEXP user, SEXP key, SEXP password, SEX
 
   /* First try public key authentication */
   if (key != R_NilValue && strstr(authlist, "publickey")) {
+    const char *keyfile = CHAR(STRING_ELT(key, 0));
     log("Trying public key authentication\n");
     int err = libssh2_userauth_publickey_fromfile(session, username, NULL, keyfile, NULL);
     if(err == -16) {
