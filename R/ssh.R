@@ -1,5 +1,16 @@
+#' SSH
+#'
+#' Interact with secure shell.
+#'
 #' @export
 #' @useDynLib ssh R_ssh_session
+#' @param host string with hostname
+#' @param port integer
+#' @param user username to authenticate with
+#' @param key (optional) private RSA key to authenticate
+#' @param password string or callback function with password
+#' @param verbose emit some more output
+#' @rdname ssh
 ssh_session <- function(host, port = 22, user = me(), key = "~/.ssh/id_rsa", password = readline, verbose = TRUE){
   stopifnot(is.character(host))
   stopifnot(is.numeric(port))
@@ -17,6 +28,36 @@ ssh_session <- function(host, port = 22, user = me(), key = "~/.ssh/id_rsa", pas
       sprintf("Key not found: %s", key)
   }
   .Call(R_ssh_session, host, port, user, key, password, verbose)
+}
+
+#' @export
+#' @useDynLib ssh R_channel_read
+#' @rdname ssh
+channel_read <- function(session){
+  .Call(R_channel_read, session, FALSE);
+}
+
+#' @export
+#' @useDynLib ssh R_channel_read
+#' @rdname ssh
+channel_read_stderr <- function(session){
+  .Call(R_channel_read, session, TRUE);
+}
+
+#' @export
+#' @useDynLib ssh R_channel_write
+#' @rdname ssh
+channel_write <- function(session, x){
+  stopifnot(is.character(x))
+  .Call(R_channel_write, session, x, FALSE);
+}
+
+#' @export
+#' @useDynLib ssh R_channel_write
+#' @rdname ssh
+channel_write_stderr <- function(session, x){
+  stopifnot(is.character(x))
+  .Call(R_channel_write, session, x, TRUE);
 }
 
 ssh <- function(host, port = 22, user = me(), key = "~/.ssh/id_rsa", pubkey =  "~/.ssh/id_rsa.pub", password = readline, verbose = FALSE) {

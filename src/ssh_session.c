@@ -16,14 +16,14 @@
 
 #include <stdlib.h>
 
-#define log(...) if(verb) Rprintf(__VA_ARGS__)
+#define log(...) if(verb) Rprintf(__VA_ARGS__); Rprintf("\n")
 
-struct session_data {
+typedef struct {
   int sock;
   int verbose;
   SEXP passcb;
   LIBSSH2_CHANNEL *channel;
-};
+} session_data;
 
 SEXP readpassword(const char *text, SEXP fun){
   if(isString(fun))
@@ -42,7 +42,8 @@ static void kbd_callback(const char *name, int name_len, const char *instruction
   LIBSSH2_USERAUTH_KBDINT_RESPONSE *responses, void **abstract) {
 
   /* get session data */
-  struct session_data *data = *abstract;
+  //struct session_data *data = *abstract;
+  session_data* data = (session_data*) *abstract;
 
   if(name_len)
     Rprintf("Authenticating for %s\n", name);
@@ -72,7 +73,7 @@ const char *get_error(LIBSSH2_SESSION *session, const char *str){
 
 void cleanup_session(LIBSSH2_SESSION *session){
   void **abstract = libssh2_session_abstract(session);
-  struct session_data *data = *abstract;
+  session_data* data = (session_data*) *abstract;
   int verb = data->verbose;
   int sock = data->sock;
   log("Cleaning up session");
@@ -89,7 +90,6 @@ void cleanup_session(LIBSSH2_SESSION *session){
 
 void ssh_error(LIBSSH2_SESSION *session, const char *str){
   const char *errstr = get_error(session, str);
-  cleanup_session(session);
   Rf_error(errstr);
 }
 
@@ -117,16 +117,17 @@ SEXP R_ssh_session(SEXP host, SEXP port, SEXP user, SEXP key, SEXP password, SEX
   sin.sin_family = AF_INET;
   sin.sin_port = htons(asInteger(port));
   sin.sin_addr.s_addr = *(long*)(hostaddr->h_addr);
-  //sin.sin_addr.s_addr = inet_addr(CHAR(STRING_ELT(host, 0)));
 
   /* allocate ssh session */
   LIBSSH2_SESSION *session = libssh2_session_init();
-  struct session_data data;
+  session_data *data = malloc(sizeof(session_data));
+  data->verbose = asLogical(verbose);
+  data->passcb = password;
+  data->sock = sock;
+
+  /* store session data in session abstract */
   void **abstract = libssh2_session_abstract(session);
-  data.verbose = asLogical(verbose);
-  data.passcb = password;
-  data.sock = sock;
-  *abstract = &data;
+  *abstract = data;
 
   /* Connect to host */
   log("starting handshake");
@@ -208,10 +209,80 @@ SEXP R_ssh_session(SEXP host, SEXP port, SEXP user, SEXP key, SEXP password, SEX
   if (libssh2_channel_shell(channel))
     ssh_error(session, "channel shell");
 
+  data->channel = channel;
+
   /* Return pointer */
   SEXP ptr = PROTECT(R_MakeExternalPtr(session, R_NilValue, R_NilValue));
   R_RegisterCFinalizerEx(ptr, fin_session, 1);
   setAttrib(ptr, R_ClassSymbol, mkString("ssh_session"));
   UNPROTECT(1);
   return ptr;
+}
+
+LIBSSH2_SESSION *get_session(SEXP ptr){
+  if(!R_ExternalPtrAddr(ptr))
+    error("session is dead");
+  LIBSSH2_SESSION *session = (LIBSSH2_SESSION*) R_ExternalPtrAddr(ptr);
+  return session;
+}
+
+LIBSSH2_CHANNEL *get_channel(LIBSSH2_SESSION *session){
+  void **abstract = libssh2_session_abstract(session);
+  session_data* data = (session_data*) *abstract;
+  return data->channel;
+}
+
+SEXP R_channel_read(SEXP ptr, SEXP read_stderr){
+  int max = 100000;
+  LIBSSH2_SESSION *session = get_session(ptr);
+  void **abstract = libssh2_session_abstract(session);
+  session_data* data = (session_data*) *abstract;
+  int verb = data->verbose;
+  char buf[max];
+  log("reading channel");
+
+  libssh2_session_set_blocking(session, 0);
+  ssize_t len;
+  if(asLogical(read_stderr)){
+    len = libssh2_channel_read_stderr(data->channel, buf, max);
+  } else {
+    len = libssh2_channel_read(data->channel, buf, max);
+  }
+  libssh2_session_set_blocking(session, 1);
+
+  if(len == LIBSSH2_ERROR_EAGAIN)
+    return R_NilValue;
+
+  if(len < 0){
+    ssh_error(session, "channel read");
+  } else {
+    log("found %d bytes", len);
+  }
+
+  SEXP res = PROTECT(allocVector(STRSXP, 1));
+  SET_STRING_ELT(res, 0, mkCharLenCE(buf, len, CE_UTF8));
+  UNPROTECT(1);
+  return res;
+}
+
+SEXP R_channel_write(SEXP ptr, SEXP x, SEXP write_stderr){
+  LIBSSH2_SESSION *session = get_session(ptr);
+  void **abstract = libssh2_session_abstract(session);
+  session_data* data = (session_data*) *abstract;
+  int verb = data->verbose;
+  ssize_t len;
+  for(int i = 0; i < LENGTH(x); i++){
+    SEXP string = STRING_ELT(x, i);
+    if(asLogical(write_stderr)){
+      len = libssh2_channel_write_stderr(data->channel, CHAR(string), LENGTH(string));
+    } else {
+      len = libssh2_channel_write(data->channel, CHAR(string), LENGTH(string));
+    }
+    if(len < 0){
+      ssh_error(session, "channel read");
+    } else {
+      log("wrote %d bytes", len);
+    }
+  }
+  return R_NilValue;
 }
