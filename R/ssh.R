@@ -1,9 +1,8 @@
-#' SSH
+#' Secure Shell
 #'
-#' Interact with secure shell.
+#' Start an interactive SSH session.
 #'
 #' @export
-#' @useDynLib ssh R_ssh_session
 #' @param host string with hostname
 #' @param port integer
 #' @param user username to authenticate with
@@ -12,7 +11,19 @@
 #' @param verbose emit some more output
 #' @name ssh
 #' @rdname ssh
-ssh_session <- function(host, port = 22, user = me(), key = "~/.ssh/id_rsa", password = readline, verbose = TRUE){
+ssh <- function(host, port = 22, user = me(), key = "~/.ssh/id_rsa", password = readline, verbose = FALSE) {
+  session <- ssh_session(host, port, user, key, password, verbose)
+  channel_attach(session)
+  on.exit(channel_detach(session))
+  repeat {
+    channel_write(session, paste0(readline(" "), "\n"))
+    if(channel_eof(session))
+      break;
+  }
+}
+
+#' @useDynLib ssh R_ssh_session
+ssh_session <- function(host, port = 22, user = me(), key = "~/.ssh/id_rsa", password = readline, verbose = FALSE){
   stopifnot(is.character(host))
   stopifnot(is.numeric(port))
   stopifnot(is.character(user))
@@ -31,44 +42,42 @@ ssh_session <- function(host, port = 22, user = me(), key = "~/.ssh/id_rsa", pas
   .Call(R_ssh_session, host, port, user, key, password, verbose)
 }
 
-#' @export
+#' @useDynLib ssh R_channel_attach
+channel_attach <- function(session){
+  .Call(R_channel_attach, session);
+}
+
+#' @useDynLib ssh R_channel_detach
+channel_detach <- function(session){
+  .Call(R_channel_detach, session);
+}
+
+
 #' @useDynLib ssh R_channel_read
-#' @rdname ssh
 channel_read <- function(session){
   .Call(R_channel_read, session, FALSE);
 }
 
-#' @export
 #' @useDynLib ssh R_channel_read
-#' @rdname ssh
 channel_read_stderr <- function(session){
   .Call(R_channel_read, session, TRUE);
 }
 
-#' @export
 #' @useDynLib ssh R_channel_write
-#' @rdname ssh
 channel_write <- function(session, x){
   stopifnot(is.character(x))
   .Call(R_channel_write, session, x, FALSE);
 }
 
-#' @export
 #' @useDynLib ssh R_channel_write
-#' @rdname ssh
 channel_write_stderr <- function(session, x){
   stopifnot(is.character(x))
   .Call(R_channel_write, session, x, TRUE);
 }
 
-ssh <- function(host, port = 22, user = me(), key = "~/.ssh/id_rsa", pubkey =  "~/.ssh/id_rsa.pub", password = readline, verbose = FALSE) {
-  session <- ssh_session(host, port, key, password, verbose)
-  session$console()
-}
-
-scp <- function(path, mode = "r", ...) {
-  session <- ssh_session(...)
-  session$file(path, mode)
+#' @useDynLib ssh R_channel_eof
+channel_eof <- function(session){
+  .Call(R_channel_eof, session);
 }
 
 me <- function(){
@@ -80,3 +89,9 @@ me <- function(){
 # session$file(path, "rb")
 # session$connection()
 # session$console()
+
+
+scp <- function(path, mode = "r", ...) {
+  session <- ssh_session(...)
+  session$file(path, mode)
+}

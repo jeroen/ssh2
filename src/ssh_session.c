@@ -4,7 +4,9 @@
  */
 
 #include <Rinternals.h>
+#include <R_ext/eventloop.h>
 #include <libssh2.h>
+#include <stdlib.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -14,15 +16,15 @@
 #include <netdb.h>
 #endif
 
-#include <stdlib.h>
-
-#define log(...) if(verb) Rprintf(__VA_ARGS__); Rprintf("\n")
+#define log(...) if(verb) REprintf(__VA_ARGS__); if(verb) REprintf("\n")
 
 typedef struct {
   int sock;
   int verbose;
+  int eof;
   SEXP passcb;
   LIBSSH2_CHANNEL *channel;
+  InputHandler *handler;
 } session_data;
 
 SEXP readpassword(const char *text, SEXP fun){
@@ -97,6 +99,36 @@ void ssh_error(LIBSSH2_SESSION *session, const char *str){
   Rf_error(errstr);
 }
 
+void loop_input_handler(void *userdata){
+  LIBSSH2_SESSION *session = (LIBSSH2_SESSION*) userdata;
+  void **abstract = libssh2_session_abstract(session);
+  session_data* data = (session_data*) *abstract;
+  if(data->eof) return;
+  int max = 100000;
+  char buf[max];
+  ssize_t len1 = 0;
+  ssize_t len2 = 0;
+  while(len1 != LIBSSH2_ERROR_EAGAIN && len2 != LIBSSH2_ERROR_EAGAIN) {
+    R_CheckUserInterrupt();
+    len1 = libssh2_channel_read(data->channel, buf, max);
+    if(len1 < 0 && len1 != LIBSSH2_ERROR_EAGAIN){
+      ssh_error(session, "stdout read");
+    } else if(len1 > 0){
+      buf[len1] = '\0';
+      Rprintf(buf);
+    }
+    len2 = libssh2_channel_read_stderr(data->channel, buf, max);
+    if(len2 < 0 && len2 != LIBSSH2_ERROR_EAGAIN){
+      ssh_error(session, "stderr read");
+    } else if(len2 > 0) {
+      buf[len2] = '\0';
+      REprintf(buf);
+    }
+    data->eof = libssh2_channel_eof(data->channel);
+    if(data->eof) break;
+  }
+}
+
 void fin_session(SEXP ptr){
   LIBSSH2_SESSION *session = (LIBSSH2_SESSION*) R_ExternalPtrAddr(ptr);
   if(session)
@@ -128,6 +160,7 @@ SEXP R_ssh_session(SEXP host, SEXP port, SEXP user, SEXP key, SEXP password, SEX
   data->verbose = asLogical(verbose);
   data->passcb = password;
   data->sock = sock;
+  data->eof = 0;
 
   /* store session data in session abstract */
   void **abstract = libssh2_session_abstract(session);
@@ -207,7 +240,7 @@ SEXP R_ssh_session(SEXP host, SEXP port, SEXP user, SEXP key, SEXP password, SEX
     ssh_error(session, "open channel");
 
   if (libssh2_channel_request_pty(channel, "vanilla"))
-    ssh_error(session, "request pty");
+      ssh_error(session, "request pty");
 
   /* Open a shell on that pty */
   if (libssh2_channel_shell(channel))
@@ -244,14 +277,9 @@ SEXP R_channel_read(SEXP ptr, SEXP read_stderr){
   int verb = data->verbose;
   char buf[max];
   log("reading channel");
-
+  int stream = asInteger(read_stderr);
   libssh2_session_set_blocking(session, 0);
-  ssize_t len;
-  if(asLogical(read_stderr)){
-    len = libssh2_channel_read_stderr(data->channel, buf, max);
-  } else {
-    len = libssh2_channel_read(data->channel, buf, max);
-  }
+  ssize_t len = libssh2_channel_read_ex(data->channel, stream, buf, max);
   libssh2_session_set_blocking(session, 1);
 
   if(len == LIBSSH2_ERROR_EAGAIN)
@@ -274,19 +302,44 @@ SEXP R_channel_write(SEXP ptr, SEXP x, SEXP write_stderr){
   void **abstract = libssh2_session_abstract(session);
   session_data* data = (session_data*) *abstract;
   int verb = data->verbose;
-  ssize_t len;
+  int stream = asInteger(write_stderr);
   for(int i = 0; i < LENGTH(x); i++){
     SEXP string = STRING_ELT(x, i);
-    if(asLogical(write_stderr)){
-      len = libssh2_channel_write_stderr(data->channel, CHAR(string), LENGTH(string));
-    } else {
-      len = libssh2_channel_write(data->channel, CHAR(string), LENGTH(string));
-    }
+    ssize_t len = libssh2_channel_write_ex(data->channel, stream, CHAR(string), LENGTH(string));
     if(len < 0){
       ssh_error(session, "channel read");
     } else {
       log("wrote %d bytes", len);
     }
   }
+  return R_NilValue;
+}
+
+SEXP R_channel_eof(SEXP ptr){
+  LIBSSH2_SESSION *session = get_session(ptr);
+  void **abstract = libssh2_session_abstract(session);
+  session_data* data = (session_data*) *abstract;
+  return ScalarLogical(data->eof);
+}
+
+/* Bind stdout/stderr to R event loop */
+SEXP R_channel_attach(SEXP ptr){
+  LIBSSH2_SESSION *session = get_session(ptr);
+  void **abstract = libssh2_session_abstract(session);
+  session_data* data = (session_data*) *abstract;
+  InputHandler *handler = addInputHandler(R_InputHandlers, data->sock, &loop_input_handler, 999);
+  handler->userData = session;
+  data->handler = handler;
+  libssh2_session_set_blocking(session, 0);
+  return R_NilValue;
+}
+
+SEXP R_channel_detach(SEXP ptr){
+  LIBSSH2_SESSION *session = get_session(ptr);
+  void **abstract = libssh2_session_abstract(session);
+  session_data* data = (session_data*) *abstract;
+  removeInputHandler(&R_InputHandlers, data->handler);
+  data->handler = NULL;
+  libssh2_session_set_blocking(session, 1);
   return R_NilValue;
 }
