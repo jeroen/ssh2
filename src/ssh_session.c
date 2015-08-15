@@ -77,6 +77,10 @@ void cleanup_session(LIBSSH2_SESSION *session){
   int verb = data->verbose;
   int sock = data->sock;
   log("Cleaning up session");
+  if(libssh2_channel_close(data->channel))
+    log(get_error(session, "channel close"));
+  if(libssh2_channel_free(data->channel))
+    log(get_error(session, "channel free"));
   if(libssh2_session_disconnect(session, "See you later"))
     log(get_error(session, "session disconnect"));
   if(libssh2_session_free(session))

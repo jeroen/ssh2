@@ -10,6 +10,7 @@
 #' @param key (optional) private RSA key to authenticate
 #' @param password string or callback function with password
 #' @param verbose emit some more output
+#' @name ssh
 #' @rdname ssh
 ssh_session <- function(host, port = 22, user = me(), key = "~/.ssh/id_rsa", password = readline, verbose = TRUE){
   stopifnot(is.character(host))
