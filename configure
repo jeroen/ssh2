@@ -24,6 +24,10 @@ if [ -z "$PKG_LIBS" ]; then
   PKG_LIBS=${LDFLAGS_DEFAULT}
 fi
 
+# For debugging
+echo "Using cflags=$PKG_CFLAGS"
+echo "Using libs=$PKG_LIBS"
+
 # Test configuration
 echo "#include $PKG_TEST_HEADER" | cc $PKG_CFLAGS -std=gnu99 -E -xc - >/dev/null 2>&1 || R_CONFIG_ERROR=1;
 
