@@ -2,7 +2,8 @@
 
 # This script will query 'pkg-config' for the required cflags and ldflags.
 # If pkg-config is unavailable or does not find the library, try setting
-# PKG_CFLAGS and PKG_LIBS manually via R CMD INSTALL --configure.args=...
+# INCLUDE_DIR and LIB_DIR manually via e.g:
+# R CMD INSTALL --configure-vars='INCLUDE_DIR=/.../include LIB_DIR=/.../lib'
 
 # Library settings
 PKG_CONFIG_NAME="libssh2"
@@ -23,6 +24,10 @@ fi
 # Note that cflags may be empty in case of success
 if [ "$PKG_CFLAGS" ] || [ "$PKG_LIBS" ]; then
   echo "Found custom cflags and libs!"
+elif [ "$INCLUDE_DIR" ] || [ "$LIB_DIR" ]; then
+  echo "Found INCLUDE_DIR and/or LIB_DIR!"
+  PKG_CFLAGS="-I$INCLUDE_DIR $CFLAGS_DEFAULT"
+  PKG_LIBS="-L$LIB_DIR $LDFLAGS_DEFAULT"
 elif [ "$PKGCONFIG_CFLAGS" ] || [ "$PKGCONFIG_LIBS" ]; then
   echo "Found pkg-config cflags and libs!"
   PKG_CFLAGS=${PKGCONFIG_CFLAGS}
@@ -47,9 +52,9 @@ if [ $R_CONFIG_ERROR ]; then
   echo " * rpm: $PKG_RPM_NAME (Fedora, CentOS, RHEL)" 1>&2
   echo " * csw: $PKG_CSW_NAME (Solaris)" 1>&2
   echo "If $PKG_CONFIG_NAME is already installed, check that 'pkg-config' is in your" 1>&2
-  echo "PATH and PKG_CONFIG_PATH contains a $PKG_CONFIG_NAME.pc file. If you do not" 1>&2
-  echo "have pkg-config at all, try setting PKG_CFLAGS and PKG_LIBS manually " 1>&2
-  echo "via: R CMD INSTALL --configure.args='...'" 1>&2
+  echo "PATH and PKG_CONFIG_PATH contains a $PKG_CONFIG_NAME.pc file. If pkg-config" 1>&2
+  echo "is unavailable you can set INCLUDE_DIR and LIB_DIR manually via:" 1>&2
+  echo "R CMD INSTALL --configure-vars='INCLUDE_DIR=... LIB_DIR=...'" 1>&2
   echo "--------------------------------------------------------------------" 1>&2
   exit 1;
 fi
