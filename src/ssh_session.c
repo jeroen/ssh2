@@ -7,7 +7,7 @@
 #include <libssh2.h>
 #include <stdlib.h>
 
-#ifdef _WIN32
+#ifdef WIN32
 #include <windows.h>
 #include <winsock2.h>
 #else
@@ -87,7 +87,7 @@ void cleanup_session(LIBSSH2_SESSION *session){
     log(get_error(session, "session disconnect"));
   if(libssh2_session_free(session))
     log(get_error(session, "session free"));
-  #ifdef _WIN32
+  #ifdef WIN32
     closesocket(sock);
   #else
     close(sock);
@@ -128,6 +128,16 @@ void loop_input_handler(void *userdata){
     if(data->eof) break;
   }
 }
+
+#ifdef WIN32
+static DWORD WINAPI ServerThreadProc(LPVOID lpParameter) {
+  while(1){
+    loop_input_handler(lpParameter);
+    Sleep(10);
+  }
+  return 0;
+}
+#endif
 
 void fin_session(SEXP ptr){
   LIBSSH2_SESSION *session = (LIBSSH2_SESSION*) R_ExternalPtrAddr(ptr);
@@ -327,7 +337,10 @@ SEXP R_channel_attach(SEXP ptr){
   LIBSSH2_SESSION *session = get_session(ptr);
   void **abstract = libssh2_session_abstract(session);
   session_data* data = (session_data*) *abstract;
-#ifndef _WIN32
+#ifdef WIN32
+  HANDLE handle = CreateThread(NULL, 0, ServerThreadProc, session, 0, 0);
+  data->handler = handle;
+#else
   InputHandler *handler = addInputHandler(R_InputHandlers, data->sock, &loop_input_handler, 999);
   handler->userData = session;
   data->handler = handler;
@@ -340,7 +353,12 @@ SEXP R_channel_detach(SEXP ptr){
   LIBSSH2_SESSION *session = get_session(ptr);
   void **abstract = libssh2_session_abstract(session);
   session_data* data = (session_data*) *abstract;
-#ifndef _WIN32
+#ifdef WIN32
+  DWORD ts = 0;
+  if (GetExitCodeThread(data->handler, &ts) && ts == STILL_ACTIVE)
+    TerminateThread(data->handler, 0);
+  data->handler = NULL;
+#else
   removeInputHandler(&R_InputHandlers, data->handler);
   data->handler = NULL;
 #endif
