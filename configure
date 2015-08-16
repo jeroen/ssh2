@@ -41,14 +41,16 @@ echo "#include $PKG_TEST_HEADER" | cc $PKG_CFLAGS -std=gnu99 -E -xc - >/dev/null
 
 # Customize the error
 if [ $R_CONFIG_ERROR ]; then
-  echo "-------------- ERROR --------------------" 1>&2
+  echo "--------------------------------- ERROR ---------------------------" 1>&2
   echo "Configuration failed because $PKG_CONFIG_NAME was not found. Try installing:" 1>&2
   echo " * deb: $PKG_DEB_NAME (Debian, Ubuntu, etc)" 1>&2
   echo " * rpm: $PKG_RPM_NAME (Fedora, CentOS, RHEL)" 1>&2
   echo " * csw: $PKG_CSW_NAME (Solaris)" 1>&2
-  echo "If $PKG_CONFIG_NAME is already installed, check that 'pkg-config' is in your PATH and PKG_CONFIG_PATH contains a $PKG_CONFIG_NAME.pc file." 1>&2
-  echo "If you do not have pkg-config at all, try setting PKG_CFLAGS and PKG_LIBS manually via R CMD INSTALL --configure.args=..." 1>&2
-  echo "-----------------------------------------" 1>&2
+  echo "If $PKG_CONFIG_NAME is already installed, check that 'pkg-config' is in your" 1>&2
+  echo "PATH and PKG_CONFIG_PATH contains a $PKG_CONFIG_NAME.pc file. If you do not" 1>&2
+  echo "have pkg-config at all, try setting PKG_CFLAGS and PKG_LIBS manually " 1>&2
+  echo "via: R CMD INSTALL --configure.args='...'" 1>&2
+  echo "--------------------------------------------------------------------" 1>&2
   exit 1;
 fi
 
