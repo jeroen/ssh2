@@ -23,4 +23,7 @@ ssh(host, port = 22, user = me(), key = "~/.ssh/id_rsa",
 \description{
 Start an interactive SSH session.
 }
+\examples{
+ssh("yourserver.com", user = "jerry")
+}
 

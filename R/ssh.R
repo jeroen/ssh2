@@ -11,6 +11,7 @@
 #' @param verbose emit some more output
 #' @name ssh
 #' @rdname ssh
+#' @examples ssh("yourserver.com", user = "jerry")
 ssh <- function(host, port = 22, user = me(), key = "~/.ssh/id_rsa", password = readline, verbose = FALSE) {
   session <- ssh_session(host, port, user, key, password, verbose)
   channel_attach(session)
