@@ -205,10 +205,13 @@ SEXP R_ssh_session(SEXP host, SEXP port, SEXP user, SEXP key, SEXP password, SEX
     int err = libssh2_userauth_publickey_fromfile(session, username, NULL, keyfile, NULL);
     if(err == -16) {
       //retry with passphrase
-      log(get_error(session, "key passphrase"));
-      SEXP pw = readpassword("Enter private key passphrase:", password);
-      if ((err = libssh2_userauth_publickey_fromfile(session, username, NULL, keyfile, CHAR(STRING_ELT(pw, 0)))))
-        log(get_error(session, "private key"));
+      const char *errmsg = get_error(session, "key passphrase");
+      log(errmsg);
+      if(!strstr(errmsg, "unimplemented in libgcrypt backend")){
+        SEXP pw = readpassword("Enter private key passphrase:", password);
+        if ((err = libssh2_userauth_publickey_fromfile(session, username, NULL, keyfile, CHAR(STRING_ELT(pw, 0)))))
+          log(get_error(session, "private key"));
+      }
     }
     if(!err){
       log("Authentication by public key succeeded.");
