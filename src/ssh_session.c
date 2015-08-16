@@ -4,7 +4,6 @@
  */
 
 #include <Rinternals.h>
-#include <R_ext/eventloop.h>
 #include <libssh2.h>
 #include <stdlib.h>
 
@@ -12,6 +11,7 @@
 #include <windows.h>
 #include <winsock2.h>
 #else
+#include <R_ext/eventloop.h>
 #include <unistd.h>
 #include <netdb.h>
 #endif
@@ -24,7 +24,7 @@ typedef struct {
   int eof;
   SEXP passcb;
   LIBSSH2_CHANNEL *channel;
-  InputHandler *handler;
+  void *handler;
 } session_data;
 
 SEXP readpassword(const char *text, SEXP fun){
@@ -87,7 +87,7 @@ void cleanup_session(LIBSSH2_SESSION *session){
     log(get_error(session, "session disconnect"));
   if(libssh2_session_free(session))
     log(get_error(session, "session free"));
-  #ifdef WIN32
+  #ifdef _WIN32
     closesocket(sock);
   #else
     close(sock);
@@ -327,9 +327,11 @@ SEXP R_channel_attach(SEXP ptr){
   LIBSSH2_SESSION *session = get_session(ptr);
   void **abstract = libssh2_session_abstract(session);
   session_data* data = (session_data*) *abstract;
+#ifndef _WIN32
   InputHandler *handler = addInputHandler(R_InputHandlers, data->sock, &loop_input_handler, 999);
   handler->userData = session;
   data->handler = handler;
+#endif
   libssh2_session_set_blocking(session, 0);
   return R_NilValue;
 }
@@ -338,8 +340,10 @@ SEXP R_channel_detach(SEXP ptr){
   LIBSSH2_SESSION *session = get_session(ptr);
   void **abstract = libssh2_session_abstract(session);
   session_data* data = (session_data*) *abstract;
+#ifndef _WIN32
   removeInputHandler(&R_InputHandlers, data->handler);
   data->handler = NULL;
+#endif
   libssh2_session_set_blocking(session, 1);
   return R_NilValue;
 }
