@@ -7,7 +7,7 @@ Description: Secure shell client for R based on 'libssh2'. Currently supports
     file transfer and basic pty modes.
 License: MIT + file LICENSE
 SystemRequirements: libssh2: libssh2-devel (rpm) or libssh2-1-dev (deb).
-URL: https://github.com/ssh/curl
+URL: https://github.com/jeroenooms/ssh
 BugReports: https://github.com/jeroenooms/ssh/issues
 Suggests: knitr, rmarkdown
 VignetteBuilder: knitr
