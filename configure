@@ -1,0 +1,43 @@
+#!/bin/bash
+
+# Library settings
+PKG_CONFIG_NAME="libssh2"
+PKG_DEB_NAME="libssh2-1-dev"
+PKG_RPM_NAME="libssh2-devel"
+PKG_CSW_NAME="libssh2_dev"
+PKG_TEST_HEADER="<libssh2.h>"
+LDFLAGS_DEFAULT="-lssh2"
+CFLAGS_DEFAULT=""
+
+# Use pkg-config if available
+PKGCONFIG=$(command -v pkg-config)
+if [ "$PKGCONFIG" ]; then
+  PKG_CFLAGS=$(pkg-config --cflags ${PKG_CONFIG_NAME})
+  PKG_LIBS=$(pkg-config --libs ${PKG_CONFIG_NAME})
+fi
+
+if [ -z "$PKG_CFLAGS" ]; then
+  PKG_LIBS=${CFLAGS_DEFAULT}
+fi
+
+if [ -z "$PKG_LIBS" ]; then
+  PKG_LIBS=${LDFLAGS_DEFAULT}
+fi
+
+# Test configuration
+echo "#include $PKG_TEST_HEADER" | cc $PKG_CFLAGS -std=gnu99 -E -xc - >/dev/null 2>&1 || R_CONFIG_ERROR=1;
+
+# Customize the error
+if [ $R_CONFIG_ERROR ]; then
+  echo "-------------- ERROR --------------------" 1>&2
+  echo "Configuration failed because $PKG_CONFIG_NAME was not found. Try installing:" 1>&2
+  echo " * deb: $PKG_DEB_NAME (Debian, Ubuntu, etc)" 1>&2
+  echo " * rpm: $PKG_RPM_NAME (Fedora, CentOS, RHEL)" 1>&2
+  echo " * csw: $PKG_CSW_NAME (Solaris)" 1>&2
+  echo "If $PKG_CONFIG_NAME is already installed, check that 'pkg-config' is in your PATH and PKG_CONFIG_PATH contains a $PKG_CONFIG_NAME.pc file." 1>&2
+  echo "-----------------------------------------" 1>&2
+  exit 1;
+fi
+
+# Write to Makevars
+sed -e "s|@cflags@|$PKG_CFLAGS|" -e "s|@libs@|$PKG_LIBS|" -e "s|@errmsg@|$PKG_ERRMSG|" src/Makevars.in > src/Makevars
