@@ -33,8 +33,8 @@ else
 fi
 
 # For debugging
-echo "Using cflags=$PKG_CFLAGS"
-echo "Using libs=$PKG_LIBS"
+echo "Using cflags=$PKG_CFLAGS" 1>&2
+echo "Using libs=$PKG_LIBS" 1>&2
 
 # Test configuration
 echo "#include $PKG_TEST_HEADER" | cc $PKG_CFLAGS -std=gnu99 -E -xc - >/dev/null 2>&1 || R_CONFIG_ERROR=1;
