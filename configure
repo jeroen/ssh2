@@ -47,6 +47,7 @@ if [ $R_CONFIG_ERROR ]; then
   echo " * rpm: $PKG_RPM_NAME (Fedora, CentOS, RHEL)" 1>&2
   echo " * csw: $PKG_CSW_NAME (Solaris)" 1>&2
   echo "If $PKG_CONFIG_NAME is already installed, check that 'pkg-config' is in your PATH and PKG_CONFIG_PATH contains a $PKG_CONFIG_NAME.pc file." 1>&2
+  echo "If you do not have pkg-config at all, try setting PKG_CFLAGS and PKG_LIBS manually via R CMD INSTALL --configure.args=..." 1>&2
   echo "-----------------------------------------" 1>&2
   exit 1;
 fi
