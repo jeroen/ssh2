@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# This script will query 'pkg-config' for the required cflags and ldflags.
+# If pkg-config is unavailable or does not find the library, try setting
+# PKG_CFLAGS and PKG_LIBS manually via R CMD INSTALL --configure.args=...
+
 # Library settings
 PKG_CONFIG_NAME="libssh2"
 PKG_DEB_NAME="libssh2-1-dev"
@@ -12,15 +16,17 @@ CFLAGS_DEFAULT=""
 # Use pkg-config if available
 PKGCONFIG=$(command -v pkg-config)
 if [ "$PKGCONFIG" ]; then
-  PKG_CFLAGS=$(pkg-config --cflags ${PKG_CONFIG_NAME})
-  PKG_LIBS=$(pkg-config --libs ${PKG_CONFIG_NAME})
+  PKGCONFIG_CFLAGS=$(pkg-config --cflags ${PKG_CONFIG_NAME})
+  PKGCONFIG_LIBS=$(pkg-config --libs ${PKG_CONFIG_NAME})
 fi
 
-if [ -z "$PKG_CFLAGS" ]; then
-  PKG_LIBS=${CFLAGS_DEFAULT}
-fi
-
-if [ -z "$PKG_LIBS" ]; then
+# Note that cflags may be empty in case of success
+if [ "$PKGCONFIG_CFLAGS" ] || [ "$PKGCONFIG_LIBS" ]; then
+  echo "Found pkg-config cflags and libs!"
+  PKG_CFLAGS=${PKGCONFIG_CFLAGS}
+  PKG_LIBS=${PKGCONFIG_LIBS}
+else
+  PKG_CFLAGS=${CFLAGS_DEFAULT}
   PKG_LIBS=${LDFLAGS_DEFAULT}
 fi
 
