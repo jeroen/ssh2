@@ -99,7 +99,7 @@ void ssh_error(LIBSSH2_SESSION *session, const char *str){
   Rf_error(errstr);
 }
 
-void loop_input_handler(void *userdata){
+void print_session_text(void *userdata){
   LIBSSH2_SESSION *session = (LIBSSH2_SESSION*) userdata;
   void **abstract = libssh2_session_abstract(session);
   session_data* data = (session_data*) *abstract;
@@ -132,8 +132,8 @@ void loop_input_handler(void *userdata){
 #ifdef WIN32
 static DWORD WINAPI ServerThreadProc(LPVOID lpParameter) {
   while(1){
-    loop_input_handler(lpParameter);
-    Sleep(10);
+    print_session_text(lpParameter);
+    Sleep(100);
   }
   return 0;
 }
@@ -249,7 +249,7 @@ SEXP R_ssh_session(SEXP host, SEXP port, SEXP user, SEXP key, SEXP password, SEX
   if(!channel)
     ssh_error(session, "open channel");
 
-  if (libssh2_channel_request_pty(channel, "vanilla"))
+  if (libssh2_channel_request_pty(channel, "vt102"))
       ssh_error(session, "request pty");
 
   /* Open a shell on that pty */
@@ -335,17 +335,17 @@ SEXP R_channel_eof(SEXP ptr){
 /* Bind stdout/stderr to R event loop */
 SEXP R_channel_attach(SEXP ptr){
   LIBSSH2_SESSION *session = get_session(ptr);
+  libssh2_session_set_blocking(session, 0);
   void **abstract = libssh2_session_abstract(session);
   session_data* data = (session_data*) *abstract;
 #ifdef WIN32
   HANDLE handle = CreateThread(NULL, 0, ServerThreadProc, session, 0, 0);
   data->handler = handle;
 #else
-  InputHandler *handler = addInputHandler(R_InputHandlers, data->sock, &loop_input_handler, 999);
+  InputHandler *handler = addInputHandler(R_InputHandlers, data->sock, &print_session_text, 999);
   handler->userData = session;
   data->handler = handler;
 #endif
-  libssh2_session_set_blocking(session, 0);
   return R_NilValue;
 }
 
