@@ -24,6 +24,8 @@ ssh(host, port = 22, user = me(), key = "~/.ssh/id_rsa",
 Start an interactive SSH session.
 }
 \examples{
+\dontrun{
 ssh("yourserver.com", user = "jerry")
+}
 }
 
