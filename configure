@@ -21,7 +21,9 @@ if [ "$PKGCONFIG" ]; then
 fi
 
 # Note that cflags may be empty in case of success
-if [ "$PKGCONFIG_CFLAGS" ] || [ "$PKGCONFIG_LIBS" ]; then
+if [ "$PKG_CFLAGS" ] || [ "$PKG_LIBS" ]; then
+  echo "Found custom cflags and libs!"
+elif [ "$PKGCONFIG_CFLAGS" ] || [ "$PKGCONFIG_LIBS" ]; then
   echo "Found pkg-config cflags and libs!"
   PKG_CFLAGS=${PKGCONFIG_CFLAGS}
   PKG_LIBS=${PKGCONFIG_LIBS}
