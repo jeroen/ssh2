@@ -46,7 +46,7 @@ echo "#include $PKG_TEST_HEADER" | cc $PKG_CFLAGS -std=gnu99 -E -xc - >/dev/null
 
 # Customize the error
 if [ $R_CONFIG_ERROR ]; then
-  echo "--------------------------------- ERROR ---------------------------" 1>&2
+  echo "-------------------------- CONFIG ERROR ---------------------------" 1>&2
   echo "Configuration failed because $PKG_CONFIG_NAME was not found. Try installing:" 1>&2
   echo " * deb: $PKG_DEB_NAME (Debian, Ubuntu, etc)" 1>&2
   echo " * rpm: $PKG_RPM_NAME (Fedora, CentOS, RHEL)" 1>&2
