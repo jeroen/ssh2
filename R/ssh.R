@@ -18,6 +18,8 @@ ssh <- function(host, port = 22, user = me(), key = "~/.ssh/id_rsa", password = 
   session <- ssh_session(host, port, user, key, password, verbose)
   channel_attach(session)
   on.exit(channel_detach(session))
+  channel_write(session, "stty -echo\n")
+  prompt <- ifelse(nchar(Sys.getenv("RSTUDIO")), " ", "")
   repeat {
     channel_write(session, paste0(readline(" "), "\n"))
     if(channel_eof(session))
