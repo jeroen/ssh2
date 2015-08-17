@@ -79,9 +79,9 @@ void cleanup_session(LIBSSH2_SESSION *session){
   int verb = data->verbose;
   int sock = data->sock;
   log("Cleaning up session");
-  if(libssh2_channel_close(data->channel))
+  if(data->channel && libssh2_channel_close(data->channel))
     log(get_error(session, "channel close"));
-  if(libssh2_channel_free(data->channel))
+  if(data->channel && libssh2_channel_free(data->channel))
     log(get_error(session, "channel free"));
   if(libssh2_session_disconnect(session, "See you later"))
     log(get_error(session, "session disconnect"));
@@ -167,6 +167,7 @@ SEXP R_ssh_session(SEXP host, SEXP port, SEXP user, SEXP key, SEXP password, SEX
   /* allocate ssh session */
   LIBSSH2_SESSION *session = libssh2_session_init();
   session_data *data = malloc(sizeof(session_data));
+  data->channel = NULL;
   data->verbose = asLogical(verbose);
   data->passcb = password;
   data->sock = sock;
