@@ -31,6 +31,15 @@ elif [ "$PKGCONFIG_CFLAGS" ] || [ "$PKGCONFIG_LIBS" ]; then
   echo "Found pkg-config cflags and libs!"
   PKG_CFLAGS=${PKGCONFIG_CFLAGS}
   PKG_LIBS=${PKGCONFIG_LIBS}
+elif [ $(echo "$OSTYPE" | grep "darwin") ]; then
+  echo "Brewing $PKG_BREW_NAME..."
+  BREWDIR="/tmp/homebrew"
+  if [ ! -r "$BREWDIR/bin/brew" ]; then
+     mkdir -p $BREWDIR && curl -fsSL https://github.com/Homebrew/homebrew/tarball/master | tar xz --strip 1 -C $BREWDIR
+  fi
+  HOMEBREW_CACHE="/tmp" $BREWDIR/bin/brew install ./tools/libssh2.rb
+  PKG_CFLAGS="-I$BREWDIR/include"
+  PKG_LIBS="-L$BREWDIR/lib -lssh2 -lcrypto -lz"
 fi
 
 # For debugging
