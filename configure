@@ -38,6 +38,7 @@ elif [ $(echo "$OSTYPE" | grep "darwin") ]; then
      mkdir -p $BREWDIR && curl -fsSL https://github.com/Homebrew/homebrew/tarball/master | tar xz --strip 1 -C $BREWDIR
   fi
   HOMEBREW_CACHE="/tmp" $BREWDIR/bin/brew install ./tools/libssh2.rb
+  rm -f $BREWDIR/lib/*.dylib
   PKG_CFLAGS="-I$BREWDIR/include"
   PKG_LIBS="-L$BREWDIR/lib -lssh2 -lcrypto -lz"
 fi
