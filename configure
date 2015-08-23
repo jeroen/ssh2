@@ -13,7 +13,13 @@ PKG_CSW_NAME="libssh2_dev"
 PKG_BREW_NAME="libssh2"
 PKG_TEST_HEADER="<libssh2.h>"
 PKG_LIBS="-lssh2"
+PKG_LIBS_STATIC="-lssh2 -lcrypto -lz"
 PKG_CFLAGS=""
+
+# Use autobrew on CRAN builder
+if [ -z "$NOT_CRAN" ] && [ $(echo "$OSTYPE" | grep "darwin") ]; then
+  AUTOBREW="./tools/libssh2.rb"
+fi
 
 # Use pkg-config if available
 PKGCONFIG=$(command -v pkg-config)
@@ -31,16 +37,16 @@ elif [ "$PKGCONFIG_CFLAGS" ] || [ "$PKGCONFIG_LIBS" ]; then
   echo "Found pkg-config cflags and libs!"
   PKG_CFLAGS=${PKGCONFIG_CFLAGS}
   PKG_LIBS=${PKGCONFIG_LIBS}
-elif [ $(echo "$OSTYPE" | grep "darwin") ]; then
+elif [ "$AUTOBREW" ]; then
   echo "Brewing $PKG_BREW_NAME..."
   BREWDIR="/tmp/homebrew"
   if [ ! -r "$BREWDIR/bin/brew" ]; then
      mkdir -p $BREWDIR && curl -fsSL https://github.com/Homebrew/homebrew/tarball/master | tar xz --strip 1 -C $BREWDIR
   fi
-  HOMEBREW_CACHE="/tmp" $BREWDIR/bin/brew install ./tools/libssh2.rb
-  rm -f $BREWDIR/lib/*.dylib
+  HOMEBREW_CACHE="/tmp" $BREWDIR/bin/brew install $AUTOBREW
   PKG_CFLAGS="-I$BREWDIR/include"
-  PKG_LIBS="-L$BREWDIR/lib -lssh2 -lcrypto -lz"
+  PKG_LIBS="-L$BREWDIR/lib $PKG_LIBS_STATIC"
+  rm -f $BREWDIR/lib/*.dylib
 fi
 
 # For debugging
@@ -61,6 +67,7 @@ if [ $R_CONFIG_ERROR ]; then
   echo "Configuration failed because $PKG_CONFIG_NAME was not found. Try installing:"
   echo " * deb: $PKG_DEB_NAME (Debian, Ubuntu, etc)"
   echo " * rpm: $PKG_RPM_NAME (Fedora, CentOS, RHEL)"
+  echo " * brew: $PKG_BREW_NAME (OSX)"
   echo " * csw: $PKG_CSW_NAME (Solaris)"
   echo "If $PKG_CONFIG_NAME is already installed, check that 'pkg-config' is in your"
   echo "PATH and PKG_CONFIG_PATH contains a $PKG_CONFIG_NAME.pc file. If pkg-config"
