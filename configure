@@ -14,17 +14,11 @@ PKG_BREW_NAME="libssh2"
 PKG_TEST_HEADER="<libssh2.h>"
 PKG_LIBS="-lssh2"
 PKG_LIBS_STATIC="-lssh2 -lcrypto -lz"
-PKG_CFLAGS=""
-
-# Use autobrew on CRAN builder
-if [ -z "$NOT_CRAN" ] && [ $(echo "$OSTYPE" | grep "darwin") ]; then
-  AUTOBREW="./tools/libssh2.rb"
-fi
+AUTOBREW="./tools/libssh2.rb"
 
 # Use pkg-config if available
-PKGCONFIG=$(command -v pkg-config)
-if [ "$PKGCONFIG" ]; then
-  PKGCONFIG_CFLAGS=$(pkg-config --cflags ${PKG_CONFIG_NAME})
+if [ $(command -v pkg-config) ]; then
+  PKGCONFIG_CFLAGS=$(pkg-config --cflags --silence-errors ${PKG_CONFIG_NAME})
   PKGCONFIG_LIBS=$(pkg-config --libs ${PKG_CONFIG_NAME})
 fi
 
@@ -37,16 +31,22 @@ elif [ "$PKGCONFIG_CFLAGS" ] || [ "$PKGCONFIG_LIBS" ]; then
   echo "Found pkg-config cflags and libs!"
   PKG_CFLAGS=${PKGCONFIG_CFLAGS}
   PKG_LIBS=${PKGCONFIG_LIBS}
-elif [ "$AUTOBREW" ]; then
-  echo "Brewing $PKG_BREW_NAME..."
-  BREWDIR="/tmp/homebrew"
-  if [ ! -r "$BREWDIR/bin/brew" ]; then
-     mkdir -p $BREWDIR && curl -fsSL https://github.com/Homebrew/homebrew/tarball/master | tar xz --strip 1 -C $BREWDIR
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+  if [ $(command -v brew) ]; then
+    BREWDIR=$(brew --prefix)
+  else
+    echo "Auto-brewing $PKG_BREW_NAME..."
+    BREWDIR="/tmp/homebrew"
+    HOMEBREW_CACHE="/tmp"
+    if [ ! -r "$BREWDIR/bin/brew" ]; then
+       mkdir -p $BREWDIR && curl -fsSL https://github.com/Homebrew/homebrew/tarball/master | tar xz --strip 1 -C $BREWDIR
+    fi
+    $BREWDIR/bin/brew install $AUTOBREW 2>&1 | sed 's/Warning/Note/g'
+    rm -f $BREWDIR/opt/$PKG_BREW_NAME/lib/*.dylib
+    PKG_LIBS="$PKG_LIBS_STATIC"
   fi
-  HOMEBREW_CACHE="/tmp" $BREWDIR/bin/brew install $AUTOBREW
-  PKG_CFLAGS="-I$BREWDIR/include"
-  PKG_LIBS="-L$BREWDIR/lib $PKG_LIBS_STATIC"
-  rm -f $BREWDIR/lib/*.dylib
+  PKG_CFLAGS="-I$BREWDIR/opt/$PKG_BREW_NAME/include"
+  PKG_LIBS="-L$BREWDIR/opt/$PKG_BREW_NAME/lib $PKG_LIBS"
 fi
 
 # For debugging
